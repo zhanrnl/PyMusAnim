@@ -9,7 +9,8 @@ def color_tuple_to_ImageColor(color_tuple):
 def add_block_info(blocks, tracks, fps, speed, dimensions, min_pitch, max_pitch):
     """Adds essential information to each block dict in blocks, also returns
     last_block_end to tell when animation is over"""
-    # need: start_time, end_time, pitch, track for each block
+    # need: start_time (seconds), end_time (seconds), pitch, track_num for each
+    # block
     last_block_end = 0
     for block in blocks:
         time_offset = block['start_time'] + 0.0
@@ -41,7 +42,7 @@ def main():
         },
     ]
 
-    input_midi_file = "contra1midicut01.MID"
+    input_midi_file = "tempochangetest01.MID"
     frame_save_dir = "genimg/contra101/"
 
     dimensions = 720, 480
@@ -52,9 +53,10 @@ def main():
 
     blocks = []
     lexer = MidiLexer()
-    blocks = lexer.lex(input_midi_file)
+    midi_events = lexer.lex(input_midi_file)
+    print midi_events
 
-    for track in tracks:
+    """for track in tracks:
         if 'color' in track:
             base_color = colorsys.rgb_to_hls(*track['color'])
             track['high_color'] = colorsys.hls_to_rgb(base_color[0], 0.9, base_color[2])
@@ -88,7 +90,7 @@ def main():
         if percent != last_percent:
             print percent, "% done"
             pass
-        last_percent = percent
+        last_percent = percent"""
 
     print "Done!"
 
