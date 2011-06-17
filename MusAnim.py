@@ -6,6 +6,31 @@ def color_tuple_to_ImageColor(color_tuple):
     color = [int(val * 255) for val in color_tuple]
     return "rgb(" + str(color)[1:-1] + ")"
 
+def blockify(midi_events):
+    blocks = []
+    bpm = 120.0
+    time_seconds = 0
+    time_beats = 0
+    for event in midi_events:
+        # increment times based on elapsed time in beats
+        d_time_beats = event['time'] - time_beats
+        time_seconds += (d_time_beats * 60.0) / bpm
+        time_beats = event['time']
+        if event['type'] == 'tempo': # set tempo
+            bpm = event['bpm']
+        elif event['type'] == 'note_on': # create new block in list
+            blocks.append({'start_time': time_seconds, 'pitch': event['pitch'],
+                'track_num': event['track_num']})
+        elif event['type'] == 'note_off': # add end_time to existing block
+            pitch = event['pitch']
+            blocks_w_pitch = [block for block in blocks
+                if block['pitch'] == pitch and 'end_time' not in block]
+            assert(blocks_w_pitch) # assume it has at least one element
+            blocks_w_pitch[0]['end_time'] = time_seconds
+        else:
+            raise Exception('wtf is this shit')
+    return blocks
+
 def add_block_info(blocks, tracks, fps, speed, dimensions, min_pitch, max_pitch):
     """Adds essential information to each block dict in blocks, also returns
     last_block_end to tell when animation is over"""
@@ -27,26 +52,39 @@ def add_block_info(blocks, tracks, fps, speed, dimensions, min_pitch, max_pitch)
         width = tracks[block['track_num']]['width']
         block['top_y'] = y_middle - (width / 2)
         block['bottom_y'] = y_middle + (width / 2)
+        block['z-index'] = tracks[block['track_num']]['z-index']
     return blocks, last_block_end
 
 def main():
     tracks = [
         {}, # dummy track if first track is just meta events
-    	{ 'name': "t1",
-          'color': (1, 0.3, 0.2),
-          'width': 6
+    	{ 'name': "vln1",
+          'color': (0.973, 0.129, 0.093), # red
+          'width': 8,
+          'z-index': 4 # higher is on top
         },
-        { 'name': "t2",
-          'color': (0.13, 0.42, 1),
-          'width': 6
+        { 'name': "vln2",
+          'color': (0.929, 0.710, 0.137), # yellow
+          'width': 8,
+          'z-index': 3
+        },
+        { 'name': "vla",
+          'color': (0.078, 0.659, 0.129), # green
+          'width': 8,
+          'z-index': 2
+        },
+        { 'name': "vc",
+          'color': (0.243, 0.286, 0.859), # blue
+          'width': 8,
+          'z-index': 1
         },
     ]
 
-    input_midi_file = "tempochangetest01.MID"
-    frame_save_dir = "genimg/contra101/"
+    input_midi_file = "overlapping01.MID"
+    frame_save_dir = "genimg/overlapping/"
 
     dimensions = 720, 480
-    speed = 1.4 # in pixels per frame
+    speed = 3 # in pixels per frame
     fps = 29.97
     # pitches to be displayed at bottom and top of screen
     min_pitch, max_pitch = 40, 80
@@ -54,9 +92,12 @@ def main():
     blocks = []
     lexer = MidiLexer()
     midi_events = lexer.lex(input_midi_file)
-    print midi_events
+    #print midi_events
 
-    """for track in tracks:
+    blocks = blockify(midi_events) # convert into list of blocks
+    #print blocks
+
+    for track in tracks:
         if 'color' in track:
             base_color = colorsys.rgb_to_hls(*track['color'])
             track['high_color'] = colorsys.hls_to_rgb(base_color[0], 0.9, base_color[2])
@@ -68,18 +109,59 @@ def main():
     percent = 0
     last_percent = -1
 
+    # sort by z-index descending
+    blocks.sort(lambda a, b: cmp(b['z-index'], a['z-index']))
+
     frame = 0 # for naming image files
     while last_block_end > (0 - speed): # generate frames while there are blocks on the screen
         im = Image.new("RGBA", dimensions, "black")
+        # overlay is for second drawing pass
+        im_overlay = Image.new("RGBA", dimensions, "black")
         draw = ImageDraw.Draw(im)
-        for block in blocks:
-            if block['start_x'] < dimensions[0] and block['end_x'] > 0: # test whether to draw block at all
-                if block['start_x'] < (dimensions[0] / 2) and block['end_x'] > (dimensions[0] / 2):
+        draw_overlay = ImageDraw.Draw(im_overlay)
+        # greyscale mask for compositing
+        mask = Image.new("L", dimensions, "black")
+        draw_mask = ImageDraw.Draw(mask)
+
+        # need to do two passes of drawing blocks, once in reverse order in full
+        # opacity, and a second time in ascending order in half-opacity to get
+        # fully-colored bars that blend together when overlapping
+
+        # get list of blocks that are on screen
+        on_screen_blocks = [block for block in blocks
+            if block['start_x'] < dimensions[0] and block['end_x'] > 0]
+
+        # do first drawing pass
+        for block in on_screen_blocks:
+            if block['start_x'] < (dimensions[0] / 2) and block['end_x'] > (dimensions[0] / 2):
                     # draw bright color
-                    color = color_tuple_to_ImageColor(tracks[block['track_num']]['high_color'])
-                else:
-                    color = color_tuple_to_ImageColor(tracks[block['track_num']]['color'])
-                draw.rectangle((block['start_x'], block['top_y'], block['end_x']-1, block['bottom_y']), color)
+                color = color_tuple_to_ImageColor(
+                    tracks[block['track_num']]['high_color'])
+            else:
+                color = color_tuple_to_ImageColor(
+                    tracks[block['track_num']]['color'])
+            draw.rectangle((block['start_x'], block['top_y'], block['end_x']-1,
+                block['bottom_y']), color)
+            # draw on mask
+            draw_mask.rectangle((block['start_x'], block['top_y'], block['end_x']-1,
+                block['bottom_y']), "grey")
+
+        # do second drawing pass
+        on_screen_blocks.reverse()
+        for block in on_screen_blocks:
+            if block['start_x'] < (dimensions[0] / 2) and block['end_x'] > (dimensions[0] / 2):
+                    # draw bright color
+                color = color_tuple_to_ImageColor(
+                    tracks[block['track_num']]['high_color'])
+            else:
+                color = color_tuple_to_ImageColor(
+                    tracks[block['track_num']]['color'])
+            draw_overlay.rectangle((block['start_x'], block['top_y'],
+                block['end_x']-1, block['bottom_y']), color)
+
+        # stick two drawing passes on top of each other
+        im.paste(im_overlay, None, mask)
+
         im.save(frame_save_dir + ("frame%05i.png" % frame))
         frame += 1
         for block in blocks: # move blocks to left
@@ -90,7 +172,7 @@ def main():
         if percent != last_percent:
             print percent, "% done"
             pass
-        last_percent = percent"""
+        last_percent = percent
 
     print "Done!"
 

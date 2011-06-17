@@ -4,7 +4,7 @@ class MidiLexer:
     ticks_per_quarter = 0
     bpm = 120
     # midi events just stores all relevant midi events and their global time in
-    # ticks, without making any pretenses about figuring out timing in seconds.
+    # beats, without making any pretenses about figuring out timing in seconds.
     # That has to be done later, once we have all the timing events sorted
     midi_events = []
 
@@ -93,6 +93,10 @@ class MidiLexer:
                 # read off midi events and add to midi_events
                 track, time = self.read_midi_event(track, time, track_num)
             track_num += 1
+
+        # convert all times from ticks to beats, for convenience
+        for event in self.midi_events:
+            event['time'] = (event['time'] + 0.0) / 960
 
         self.midi_events.sort(lambda a, b: cmp(a['time'], b['time']))
         return self.midi_events
