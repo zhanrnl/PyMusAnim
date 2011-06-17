@@ -48,19 +48,32 @@ class MidiLexer:
         # otherwise we we assume it's a midi event
         elif ((ord(track_data[0]) & 0xF0) >> 4) == 0x8:
             # note off event
-            self.midi_events.append({'type': 'note_off', 'time': time,
-                'pitch': ord(track_data[1]), 'track_num': track_num})
+            # don't add a note off event if keyswitch (pitch below 12)
+            pitch = ord(track_data[1])
+            if pitch >= 12:
+                self.midi_events.append({'type': 'note_off', 'time': time,
+                    'pitch': pitch, 'track_num': track_num})
             return track_data[3:], time
 
         elif ((ord(track_data[0]) & 0xF0) >> 4) == 0x9:
             # note on event
-            self.midi_events.append({'type': 'note_on', 'time': time,
-                'pitch': ord(track_data[1]), 'track_num': track_num})
+            pitch = ord(track_data[1])
+            if pitch < 12: # it's a keyswitch!
+                if pitch == 0:
+                    mode = "normal"
+                elif pitch == 1:
+                    mode = "pizz"
+                else:
+                    raise Exception("Unknown keyswitch")
+                self.midi_events.append({'type': 'keyswitch', 'time': time,
+                    'track_num': track_num, 'mode': mode})
+            else:
+                self.midi_events.append({'type': 'note_on', 'time': time,
+                    'pitch': ord(track_data[1]), 'track_num': track_num})
             return track_data[3:], time
 
         else:
-            raise Exception("I don't want your damn lemons, " +
-                            "what am I supposed to do with these")
+            raise Exception("Unknown midi file data event")
 
     def lex(self, filename):
         """Returns block list for musanim from a midi file given in filename"""
