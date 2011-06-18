@@ -41,33 +41,60 @@ def blockify(midi_events):
             raise Exception('Unknown midi event')
     return blocks
 
-def add_block_info(blocks, tracks, fps, speed, dimensions, min_pitch,
+def add_block_info(blocks, tracks, fps, speed_map, dimensions, min_pitch,
     max_pitch):
     """Adds essential information to each block dict in blocks, also returns
     last_block_end to tell when animation is over"""
     # need: start_time (seconds), end_time (seconds), pitch, track_num for each
     # block
     last_block_end = 0
+    cur_speed = get_speed(speed_map, 0.0)
+
     for block in blocks:
         width = tracks[block['track_num']]['width']
-        time_offset = block['start_time'] + 0.0
-        frame_offset = time_offset * fps
-        x_offset = frame_offset * speed
+        cur_speed = get_speed(speed_map, block['start_time'])
+        x_offset = calc_offset(speed_map, block['start_time'], fps)
         block['start_x'] = x_offset + dimensions[0]
         block['length'] = block['end_time'] - block['start_time'] + 0.0
         if block['shape'] == 'circle':
             x_length = width
         else:
-            x_length = block['length'] * fps * speed
+            x_length = block['length'] * fps * cur_speed
         block['end_x'] = block['start_x'] + x_length
         if block['end_x'] > last_block_end:
             last_block_end = block['end_x']
-        y_middle = ((0.0 + max_pitch - block['pitch'])
-                    / (max_pitch - min_pitch)) * dimensions[1]
+        y_middle = ((0.0 + max_pitch - block['pitch']) / (max_pitch -
+            min_pitch)) * dimensions[1]
         block['top_y'] = y_middle - (width / 2)
         block['bottom_y'] = y_middle + (width / 2)
         block['z-index'] = tracks[block['track_num']]['z-index']
+
     return blocks, last_block_end
+
+def calc_offset(speed_map, time_offset, fps):
+    x_offset = 0
+    i = 0
+    # speed is a dict with a speed and a time when we switch to speed
+    speeds = [speed for speed in speed_map if speed['time'] < time_offset][0:-1]
+    # add offsets from previous speed intervals
+    if speeds:
+        for speed in speeds:
+            x_offset += ((speed_map[i+1]['time'] - speed_map[i]['time'])
+                * fps * speed_map[i]['speed'])
+            i += 1
+    # add offset from current speed
+    if time_offset > 0:
+        x_offset += ((time_offset - speed_map[i]['time']) * fps
+            * speed_map[i]['speed'])
+    return x_offset
+
+def get_speed(speed_map, time):
+    """Retrieves the correct block speed for a given point in time from the
+    speed map."""
+    i = len(speed_map) - 1
+    while time < speed_map[i]['time'] and i > 0:
+        i -= 1
+    return speed_map[i]['speed']
 
 def draw_block(block, tracks, dimensions, draw, draw_mask=None):
     if block['start_x'] < (dimensions[0] / 2) and (block['end_x'] >
@@ -108,26 +135,36 @@ def main():
           'z-index': 2
         },
         { 'name': "vc",
-          'color': (0.243, 0.286, 0.859), # blue
+          'color': (0.098, 0.443, 1), # blue
           'width': 8,
           'z-index': 1
         },
     ]
 
-    input_midi_file = "keyswitch02.MID"
-    frame_save_dir = "genimg/keyswitch02/"
+    input_midi_file = "simplescale.MID"
+    frame_save_dir = "genimg/testspeedchange/"
 
     dimensions = 720, 480
-    speed = 5 # in pixels per frame
+    speed = 3 # in pixels per frame
     fps = 29.97
     # pitches to be displayed at bottom and top of screen
-    min_pitch, max_pitch = 40, 80
+    min_pitch, max_pitch = 30, 90
 
     blocks = []
     lexer = MidiLexer()
     midi_events = lexer.lex(input_midi_file)
 
     blocks = blockify(midi_events) # convert into list of blocks
+
+    # speed change events, time given in seconds
+    speed_map = [
+        {'time': 0.0, 'speed': 5},
+        {'time': 0.5, 'speed': 8},
+        {'time': 1.0, 'speed': 3},
+        {'time': 1.25, 'speed': 9},
+        {'time': 1.75, 'speed': 2},
+        {'time': 2.25, 'speed': 20}
+    ]
 
     for track in tracks:
         if 'color' in track:
@@ -136,7 +173,7 @@ def main():
                 base_color[2])
 
     # do some useful calculations on all blocks
-    blocks, last_block_end = add_block_info(blocks, tracks, fps, speed,
+    blocks, last_block_end = add_block_info(blocks, tracks, fps, speed_map,
         dimensions, min_pitch, max_pitch)
 
     # following used for calculating percentage done to print to console
@@ -147,7 +184,11 @@ def main():
     # sort by z-index descending
     blocks.sort(lambda a, b: cmp(b['z-index'], a['z-index']))
 
-    frame = 0 # for naming image files
+    # for naming image files:
+    frame = 0
+    # for keeping track of speed changes:
+    time = -dimensions[0]/(2.0*fps*speed_map[0]['speed'])
+
     # generate frames while there are blocks on the screen:
     while last_block_end > (0 - speed):
         im = Image.new("RGBA", dimensions, "black")
@@ -181,6 +222,8 @@ def main():
 
         im.save(frame_save_dir + ("frame%05i.png" % frame))
         frame += 1
+        # need to set speed
+        speed = get_speed(speed_map, time)
         for block in blocks: # move blocks to left
             block['start_x'] -= speed
             block['end_x'] -= speed
@@ -190,6 +233,8 @@ def main():
         if percent != last_percent:
             print percent, "% done"
         last_percent = percent
+
+        time += (1/fps)
 
     print "Done!"
 
