@@ -31,8 +31,10 @@ def blockify(midi_events):
                 raise Exception('Unknown track mode')
         elif event['type'] == 'note_off': # add end_time to existing block
             pitch = event['pitch']
+            track_num = event['track_num']
             blocks_w_pitch = [block for block in blocks
-                if block['pitch'] == pitch and 'end_time' not in block]
+                if block['pitch'] == pitch and block['track_num'] == track_num
+                and 'end_time' not in block]
             assert(blocks_w_pitch) # assume it has at least one element
             blocks_w_pitch[0]['end_time'] = time_seconds
         elif event['type'] == 'keyswitch':
@@ -117,6 +119,7 @@ def draw_block(block, tracks, dimensions, draw, draw_mask=None):
                 block['end_x']-1, block['bottom_y']), "grey")
 
 def main():
+    print "Beginning render..."
     tracks = [
         {}, # dummy track if first track is just meta events
     	{ 'name': "vln1",
@@ -141,29 +144,27 @@ def main():
         },
     ]
 
-    input_midi_file = "simplescale.MID"
-    frame_save_dir = "genimg/testspeedchange/"
+    input_midi_file = "beethoven74midicut02.MID"
+    frame_save_dir = "genimg/beethoven7402/"
 
     dimensions = 720, 480
-    speed = 3 # in pixels per frame
+    speed = 2 # in pixels per frame
     fps = 29.97
     # pitches to be displayed at bottom and top of screen
-    min_pitch, max_pitch = 30, 90
+    min_pitch, max_pitch = 33, 97
 
+    print "Lexing midi..."
     blocks = []
     lexer = MidiLexer()
     midi_events = lexer.lex(input_midi_file)
 
+    print "Blockifying midi..."
     blocks = blockify(midi_events) # convert into list of blocks
 
     # speed change events, time given in seconds
     speed_map = [
-        {'time': 0.0, 'speed': 5},
-        {'time': 0.5, 'speed': 8},
-        {'time': 1.0, 'speed': 3},
-        {'time': 1.25, 'speed': 9},
-        {'time': 1.75, 'speed': 2},
-        {'time': 2.25, 'speed': 20}
+        {'time': 0.0, 'speed': 2},
+        {'time': 99.217, 'speed': 5}
     ]
 
     for track in tracks:
@@ -189,6 +190,7 @@ def main():
     # for keeping track of speed changes:
     time = -dimensions[0]/(2.0*fps*speed_map[0]['speed'])
 
+    print "Rendering frames..."
     # generate frames while there are blocks on the screen:
     while last_block_end > (0 - speed):
         im = Image.new("RGBA", dimensions, "black")
