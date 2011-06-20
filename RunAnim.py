@@ -1,11 +1,12 @@
-from MusAnim import MusAnimRenderer
+from MusAnimRenderer import MusAnimRenderer
 
 def main():
+    # the filename of the midi file to read music from
     input_midi_filename = "beethoven74midicut02.MID"
+    # the directory to save the generated frames to
     frame_save_dir = "genimg/beethoven7402/"
-    input_midi_filename = "simplescale.MID"
-    frame_save_dir = "genimg/scale/"
 
+    # rendering parameters of all midi tracks in the midi file
     tracks = [
         {}, # dummy track if first track is just meta events
     	{ 'name': "vln1",
@@ -30,16 +31,20 @@ def main():
         },
     ]
 
+    # for changing the block speed in the middle of an animation
     speed_map = [
-        {'time': 0.0, 'speed': 2},
+        {'time': 0.0, 'speed': 2}, # time is in seconds from first event
         {'time': 99.217, 'speed': 5}
     ]
 
+    # dimensions of generated image files
     dimensions = 720, 480
+    # the intended fps of the animation
     fps = 29.97
     # pitches to be displayed at bottom and top of screen
     min_pitch, max_pitch = 33, 97
 
+    # enough config, let's render that shit
     renderer = MusAnimRenderer()
     renderer.render(input_midi_filename, frame_save_dir, tracks, speed_map,
         dimensions, fps, min_pitch, max_pitch)

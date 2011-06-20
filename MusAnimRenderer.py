@@ -1,8 +1,8 @@
 import os, sys, colorsys
 import Image, ImageDraw, ImageColor
-from MusAnimLexer import *
+from MusAnimLexer import MidiLexer
 
-class MusAnim:
+class MusAnimRenderer:
     def color_tuple_to_ImageColor(self, color_tuple):
         color = [int(val * 255) for val in color_tuple]
         return "rgb(" + str(color)[1:-1] + ")"
@@ -21,8 +21,8 @@ class MusAnim:
             if event['type'] == 'tempo': # set tempo
                 bpm = event['bpm']
             elif event['type'] == 'note_on': # create new block in list
-                blocks.append({'start_time': time_seconds, 'pitch': event['pitch'],
-                    'track_num': event['track_num']})
+                blocks.append({'start_time': time_seconds, 'pitch':
+                    event['pitch'], 'track_num': event['track_num']})
                 # set shape of block to bar or circle
                 if tracks_mode[event['track_num']] == 'normal':
                     blocks[-1]['shape'] = 'bar'
@@ -34,8 +34,8 @@ class MusAnim:
                 pitch = event['pitch']
                 track_num = event['track_num']
                 blocks_w_pitch = [block for block in blocks
-                    if block['pitch'] == pitch and block['track_num'] == track_num
-                    and 'end_time' not in block]
+                    if block['pitch'] == pitch and block['track_num']
+                        == track_num and 'end_time' not in block]
                 assert(blocks_w_pitch) # assume it has at least one element
                 blocks_w_pitch[0]['end_time'] = time_seconds
             elif event['type'] == 'keyswitch':
@@ -48,15 +48,15 @@ class MusAnim:
         min_pitch, max_pitch):
         """Adds essential information to each block dict in blocks, also returns
         last_block_end to tell when animation is over"""
-        # need: start_time (seconds), end_time (seconds), pitch, track_num for each
-        # block
+        # need: start_time (seconds), end_time (seconds), pitch, track_num for
+        # each block
         last_block_end = 0
-        cur_speed = get_speed(speed_map, 0.0)
+        cur_speed = self.get_speed(speed_map, 0.0)
 
         for block in blocks:
             width = tracks[block['track_num']]['width']
-            cur_speed = get_speed(speed_map, block['start_time'])
-            x_offset = calc_offset(speed_map, block['start_time'], fps)
+            cur_speed = self.get_speed(speed_map, block['start_time'])
+            x_offset = self.calc_offset(speed_map, block['start_time'], fps)
             block['start_x'] = x_offset + dimensions[0]
             block['length'] = block['end_time'] - block['start_time'] + 0.0
             if block['shape'] == 'circle':
@@ -75,10 +75,14 @@ class MusAnim:
         return blocks, last_block_end
 
     def calc_offset(self, speed_map, time_offset, fps):
+        """Calculates the x-offset of a block given its time offset and a speed
+        map. Needed for laying out blocks because of variable block speed in the
+        animation."""
         x_offset = 0
         i = 0
         # speed is a dict with a speed and a time when we switch to speed
-        speeds = [speed for speed in speed_map if speed['time'] < time_offset][0:-1]
+        speeds = ([speed for speed in speed_map if speed['time'] < time_offset]
+            [0:-1])
         # add offsets from previous speed intervals
         if speeds:
             for speed in speeds:
@@ -102,16 +106,17 @@ class MusAnim:
     def draw_block(self, block, tracks, dimensions, draw, draw_mask=None):
         if block['start_x'] < (dimensions[0] / 2) and (block['end_x'] >
             (dimensions[0] / 2)):
-            color = color_tuple_to_ImageColor(tracks[block['track_num']]
+            color = self.color_tuple_to_ImageColor(tracks[block['track_num']]
                 ['high_color'])
         else:
-            color = color_tuple_to_ImageColor(tracks[block['track_num']]['color'])
+            color = self.color_tuple_to_ImageColor(tracks[block['track_num']]
+                ['color'])
         if block['shape'] == 'circle':
             draw.ellipse((block['start_x'], block['top_y'], block['end_x'],
                 block['bottom_y']), color)
             if draw_mask:
-                draw_mask.ellipse((block['start_x'], block['top_y'], block['end_x'],
-                    block['bottom_y']), "grey")
+                draw_mask.ellipse((block['start_x'], block['top_y'],
+                    block['end_x'], block['bottom_y']), "grey")
         else:
             draw.rectangle((block['start_x'], block['top_y'], block['end_x']-1,
                 block['bottom_y']), color)
@@ -119,54 +124,18 @@ class MusAnim:
                 draw_mask.rectangle((block['start_x'], block['top_y'],
                     block['end_x']-1, block['bottom_y']), "grey")
 
-    def render(self):
+    def render(self, input_midi_filename, frame_save_dir, tracks, speed_map,
+        dimensions, fps, min_pitch, max_pitch):
+
         print "Beginning render..."
-        tracks = [
-            {}, # dummy track if first track is just meta events
-        	{ 'name': "vln1",
-              'color': (0.973, 0.129, 0.093), # red
-              'width': 8,
-              'z-index': 4 # higher is on top
-            },
-            { 'name': "vln2",
-              'color': (0.929, 0.710, 0.137), # yellow
-              'width': 8,
-              'z-index': 3
-            },
-            { 'name': "vla",
-              'color': (0.078, 0.659, 0.129), # green
-              'width': 8,
-              'z-index': 2
-            },
-            { 'name': "vc",
-              'color': (0.098, 0.443, 1), # blue
-              'width': 8,
-              'z-index': 1
-            },
-        ]
-
-        input_midi_file = "beethoven74midicut02.MID"
-        frame_save_dir = "genimg/beethoven7402/"
-
-        dimensions = 720, 480
-        speed = 2 # in pixels per frame
-        fps = 29.97
-        # pitches to be displayed at bottom and top of screen
-        min_pitch, max_pitch = 33, 97
-
+        speed = speed_map[0]['speed']
         print "Lexing midi..."
         blocks = []
         lexer = MidiLexer()
-        midi_events = lexer.lex(input_midi_file)
+        midi_events = lexer.lex(input_midi_filename)
 
         print "Blockifying midi..."
-        blocks = blockify(midi_events) # convert into list of blocks
-
-        # speed change events, time given in seconds
-        speed_map = [
-            {'time': 0.0, 'speed': 2},
-            {'time': 99.217, 'speed': 5}
-        ]
+        blocks = self.blockify(midi_events) # convert into list of blocks
 
         for track in tracks:
             if 'color' in track:
@@ -175,8 +144,8 @@ class MusAnim:
                     base_color[2])
 
         # do some useful calculations on all blocks
-        blocks, last_block_end = add_block_info(blocks, tracks, fps, speed_map,
-            dimensions, min_pitch, max_pitch)
+        blocks, last_block_end = self.add_block_info(blocks, tracks, fps,
+            speed_map, dimensions, min_pitch, max_pitch)
 
         # following used for calculating percentage done to print to console
         original_end = last_block_end
@@ -203,9 +172,9 @@ class MusAnim:
             mask = Image.new("L", dimensions, "black")
             draw_mask = ImageDraw.Draw(mask)
 
-            # need to do two passes of drawing blocks, once in reverse order in full
-            # opacity, and a second time in ascending order in half-opacity to get
-            # fully-colored bars that blend together when overlapping
+            # need to do two passes of drawing blocks, once in reverse order in
+            # full opacity, and a second time in ascending order in half-opacity
+            # to get fully-colored bars that blend together when overlapping
 
             # get list of blocks that are on screen
             on_screen_blocks = [block for block in blocks
@@ -213,12 +182,12 @@ class MusAnim:
 
             # do first drawing pass
             for block in on_screen_blocks:
-                draw_block(block, tracks, dimensions, draw, draw_mask)
+                self.draw_block(block, tracks, dimensions, draw, draw_mask)
 
             # do second drawing pass
             on_screen_blocks.reverse()
             for block in on_screen_blocks:
-                draw_block(block, tracks, dimensions, draw_overlay)
+                self.draw_block(block, tracks, dimensions, draw_overlay)
 
             # stick two drawing passes on top of each other
             im.paste(im_overlay, None, mask)
@@ -226,7 +195,7 @@ class MusAnim:
             im.save(frame_save_dir + ("frame%05i.png" % frame))
             frame += 1
             # need to set speed
-            speed = get_speed(speed_map, time)
+            speed = self.get_speed(speed_map, time)
             for block in blocks: # move blocks to left
                 block['start_x'] -= speed
                 block['end_x'] -= speed
@@ -241,5 +210,7 @@ class MusAnim:
 
         print "Done!"
 
+
 if __name__ == '__main__':
-    main()
+    print ("Sorry, I don't really do anything useful as an executable, see "
+        "RunAnim.py for usage")
