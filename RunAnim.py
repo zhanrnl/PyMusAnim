@@ -1,0 +1,49 @@
+from MusAnim import MusAnimRenderer
+
+def main():
+    input_midi_filename = "beethoven74midicut02.MID"
+    frame_save_dir = "genimg/beethoven7402/"
+    input_midi_filename = "simplescale.MID"
+    frame_save_dir = "genimg/scale/"
+
+    tracks = [
+        {}, # dummy track if first track is just meta events
+    	{ 'name': "vln1",
+          'color': (0.973, 0.129, 0.093), # red
+          'width': 8,
+          'z-index': 4 # higher is on top
+        },
+        { 'name': "vln2",
+          'color': (0.929, 0.710, 0.137), # yellow
+          'width': 8,
+          'z-index': 3
+        },
+        { 'name': "vla",
+          'color': (0.078, 0.659, 0.129), # green
+          'width': 8,
+          'z-index': 2
+        },
+        { 'name': "vc",
+          'color': (0.098, 0.443, 1), # blue
+          'width': 8,
+          'z-index': 1
+        },
+    ]
+
+    speed_map = [
+        {'time': 0.0, 'speed': 2},
+        {'time': 99.217, 'speed': 5}
+    ]
+
+    dimensions = 720, 480
+    fps = 29.97
+    # pitches to be displayed at bottom and top of screen
+    min_pitch, max_pitch = 33, 97
+
+    renderer = MusAnimRenderer()
+    renderer.render(input_midi_filename, frame_save_dir, tracks, speed_map,
+        dimensions, fps, min_pitch, max_pitch)
+
+
+if __name__ == '__main__':
+    main()
