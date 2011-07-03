@@ -8,9 +8,6 @@ class MidiLexer:
     # That has to be done later, once we have all the timing events sorted
     midi_events = []
 
-    def __init__(self):
-        pass
-
     def get_v_time(self, data):
         """Picks off the variable-length time from a block of data and returns
         both pieces as a tuple, with the time in ticks"""
@@ -34,6 +31,7 @@ class MidiLexer:
         if track_data[0] == '\xff':
             # event is meta event, we do nothing unless it's a tempo event
             if ord(track_data[1]) == 0x51:
+                #print track_num, list(track_data)
                 # tempo event
                 mpqn = ((ord(track_data[3]) << 16) + (ord(track_data[4]) << 8)
                     + ord(track_data[5])) # microseconds per quarter note
@@ -86,7 +84,7 @@ class MidiLexer:
         blocks = []
 
         # open and read file
-        f = open(filename)
+        f = open(filename, 'rb')
         s = f.read()
 
         # grab header
