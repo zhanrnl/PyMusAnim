@@ -102,7 +102,7 @@ class MusAnimRenderer:
         for block in blocks:
             track_num = block['track_num']
             track = tracks[block['track_num']]
-            if track['lyrics']:
+            if track['lyrics'][0]:
 
                 lyrics_text = track['lyrics'][0]
                 if lyrics_text[0] == '^':
@@ -186,19 +186,18 @@ class MusAnimRenderer:
 
     def draw_lyrics(self, block, tracks, dimensions, draw, mask, font):
         if block['lyrics_position'] == 'above':
-            corner = (block['start_x'] + 2, block['top_y']-11)
+            corner = (block['start_x'] + 2, block['top_y']-14)
         elif block['lyrics_position'] == 'below':
-            corner = (block['start_x'] + 2, block['top_y']+3)
+            corner = (block['start_x'] + 2, block['top_y'])
         else:
-            corner = (block['start_x'] + 2, block['top_y']-4)
+            corner = (block['start_x'] + 2, block['top_y']-7)
         text = block['lyrics']
         if block['start_x'] < (dimensions[0] / 2) and (block['lyrics_end_x'] >
             (dimensions[0] / 2)):
-            color = self.color_tuple_to_ImageColor(tracks[block['track_num']]
-                ['high_color'])
+            color = "white"
         else:
             color = self.color_tuple_to_ImageColor(tracks[block['track_num']]
-                ['color'])
+                ['lyrics_color'])
         draw.text(corner, text, font=font, fill=color)
         text_size = draw.textsize(text, font=font)
         if block['lyrics_position'] == 'above':
@@ -235,7 +234,9 @@ class MusAnimRenderer:
         for track in tracks:
             if 'color' in track:
                 base_color = colorsys.rgb_to_hls(*track['color'])
-                track['high_color'] = colorsys.hls_to_rgb(base_color[0], 0.9,
+                track['high_color'] = colorsys.hls_to_rgb(base_color[0], 0.95,
+                    base_color[2])
+                track['lyrics_color'] = colorsys.hls_to_rgb(base_color[0], 0.7,
                     base_color[2])
             if 'lyrics' in track:
                 track['lyrics'] = self.lyrics_deque(track['lyrics'])
@@ -263,7 +264,7 @@ class MusAnimRenderer:
             return
 
         print "Rendering frames..."
-        font = ImageFont.truetype('constanb.ttf', 18)
+        font = ImageFont.truetype('IMFePIrm29P.ttf', 18)
         # generate frames while there are blocks on the screen:
         while last_block_end > (0 - speed):
             if frame >= first_frame and frame <= last_frame:
