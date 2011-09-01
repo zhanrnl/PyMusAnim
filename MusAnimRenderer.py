@@ -1,7 +1,10 @@
-import os, sys, colorsys
-import Image, ImageDraw, ImageColor, ImageFont
-from MusAnimLexer import MidiLexer
+import os
+import sys
+import colorsys
+import cairo
+import math
 from collections import deque
+from MusAnimLexer import MidiLexer
 
 class MusAnimRenderer:
     def lyrics_deque(self, lyrics):
@@ -11,21 +14,20 @@ class MusAnimRenderer:
         lyrics_list = lyrics.split(" ")
         lyrics_list2 = []
         for word in lyrics_list:
+            """
             if word and word[-1] == '-':
-                word = word[0:-1] + ' -'
+                word = word[0:-1] + ' -'"""
             lyrics_list2.append(word)
         return deque(lyrics_list2)
 
-    def color_tuple_to_ImageColor(self, color_tuple):
-        color = [int(val * 255) for val in color_tuple]
-        return "rgb(" + str(color)[1:-1] + ")"
-
     def blockify(self, midi_events):
+        """Converts list of midi events given by the lexer into block data used
+        for animating."""
         blocks = []
         bpm = 120.0
         time_seconds = 0
         time_beats = 0
-        tracks_mode = ['normal'] * 5
+        tracks_mode = ['normal'] * 9
         for event in midi_events:
             # increment times based on elapsed time in beats
             d_time_beats = event['time'] - time_beats
@@ -70,7 +72,7 @@ class MusAnimRenderer:
         for block in blocks:
             # get track object that corresponds to block
             track = tracks[block['track_num']]
-            width = track['width'] # set width
+            block['width'] = track['width'] # set width
             # get speed and calculate x offset from functions
             cur_speed = self.get_speed(speed_map, block['start_time'])
             x_offset = self.calc_offset(speed_map, block['start_time'], fps)
@@ -80,19 +82,23 @@ class MusAnimRenderer:
             # if a circle, length is same as width, otherwise length
             # corresponds to time length
             if block['shape'] == 'circle':
-                x_length = width
+                block['x_length'] = block['width']
             else:
-                x_length = block['length'] * fps * cur_speed
-            block['end_x'] = block['start_x'] + x_length
+                block['x_length'] = block['length'] * fps * cur_speed
+            block['end_x'] = block['start_x'] + block['x_length']
             # set last_block_end as the end_x of the very rightmost block
             if block['end_x'] > last_block_end:
                 last_block_end = block['end_x']
             # figure out draw coordinates
             y_middle = ((0.0 + max_pitch - block['pitch']) / (max_pitch -
                 min_pitch)) * dimensions[1]
-            block['top_y'] = y_middle - (width / 2)
-            block['bottom_y'] = y_middle + (width / 2)
+            block['top_y'] = y_middle - (block['width'] / 2)
+            block['bottom_y'] = y_middle + (block['width'] / 2)
             block['z-index'] = track['z-index']
+            # round stuff for crisp rendering
+            #block['x_length'] = round(block['x_length'])
+            block['top_y'] = round(block['top_y'])
+            #block['start_x'] = round(block['start_x'])
 
         # sort by track_num so we get proper melisma length counting
         blocks.sort(lambda a, b: cmp(a['track_num'], b['track_num']))
@@ -102,8 +108,7 @@ class MusAnimRenderer:
         for block in blocks:
             track_num = block['track_num']
             track = tracks[block['track_num']]
-            if track['lyrics'][0]:
-
+            if 'lyrics' in track and track['lyrics'][0]:
                 lyrics_text = track['lyrics'][0]
                 if lyrics_text[0] == '^':
                     lyrics_text = lyrics_text[1:]
@@ -161,67 +166,62 @@ class MusAnimRenderer:
             i -= 1
         return speed_map[i]['speed']
 
-    def draw_block(self, block, tracks, dimensions, draw, draw_mask=None):
-        """Draws a block onto an ImageDraw object given in draw from data in
-        block dict."""
+    def draw_block_cairo(self, block, tracks, dimensions, cr, transparent=False):
         if block['start_x'] < (dimensions[0] / 2) and (block['end_x'] >
             (dimensions[0] / 2)):
-            color = self.color_tuple_to_ImageColor(tracks[block['track_num']]
-                ['high_color'])
+            color = tracks[block['track_num']]['high_color']
         else:
-            color = self.color_tuple_to_ImageColor(tracks[block['track_num']]
-                ['color'])
+            color = tracks[block['track_num']]['color']
+        if transparent:
+            r, g, b = color
+            cr.set_source_rgba(r, g, b, 0.5)
+        else:
+            cr.set_source_rgb(*color)
         if block['shape'] == 'circle':
-            draw.ellipse((block['start_x'], block['top_y']-1, block['end_x']+2,
-                block['bottom_y']+1), color)
-            if draw_mask:
-                draw_mask.ellipse((block['start_x'], block['top_y']-1,
-                    block['end_x']+2, block['bottom_y']-1), "grey")
+            cr.arc(block['start_x'] + block['width']/2, block['top_y'] + block['width']/2, block['width']/2, 0, 2 * math.pi)
         else:
-            draw.rectangle((block['start_x'], block['top_y'], block['end_x']-1,
-                block['bottom_y']), color)
-            if draw_mask:
-                draw_mask.rectangle((block['start_x'], block['top_y'],
-                    block['end_x']-1, block['bottom_y']), "grey")
+            cr.rectangle(block['start_x'], block['top_y'], block['x_length'],
+                block['width'])
+        cr.fill()
 
-    def draw_lyrics(self, block, tracks, dimensions, draw, mask, font):
-        if block['lyrics_position'] == 'above':
-            corner = (block['start_x'] + 2, block['top_y']-14)
-        elif block['lyrics_position'] == 'below':
-            corner = (block['start_x'] + 2, block['top_y'])
-        else:
-            corner = (block['start_x'] + 2, block['top_y']-7)
+    def draw_lyrics_cairo(self, block, tracks, dimensions, cr):
         text = block['lyrics']
+        x_bearing, y_bearing, width, height = cr.text_extents(text)[:4]
+        cr.set_source_rgba(0, 0, 0, 0.5)
+        if block['lyrics_position'] == 'above':
+            rect = (block['start_x'], int(block['top_y'])-7, width + 2, block['width']+1)
+        elif block['lyrics_position'] == 'below':
+            rect = (block['start_x'], int(block['top_y'])+7, width + 2, block['width']+1)
+        else:
+            rect = (block['start_x'], int(block['top_y']), width + 2, block['width']+1)
+        cr.rectangle(*rect)
+        cr.fill()
         if block['start_x'] < (dimensions[0] / 2) and (block['lyrics_end_x'] >
             (dimensions[0] / 2)):
-            color = "white"
+            color = (1, 1, 1)
         else:
-            color = self.color_tuple_to_ImageColor(tracks[block['track_num']]
-                ['lyrics_color'])
-        draw.text(corner, text, font=font, fill=color)
-        text_size = draw.textsize(text, font=font)
+            color = tracks[block['track_num']]['lyrics_color']
+        cr.set_source_rgb(*color)
         if block['lyrics_position'] == 'above':
-            rect = (block['start_x'], block['top_y']-7,
-                block['start_x'] + text_size[0] + 3, block['bottom_y']-7)
+            corner = (block['start_x'] + 1, block['top_y']+block['width']+6-14)
         elif block['lyrics_position'] == 'below':
-            rect = (block['start_x'], block['top_y']+7,
-                block['start_x'] + text_size[0] + 3, block['bottom_y']+7)
+            corner = (block['start_x'] + 1, block['top_y']+block['width']+6)
         else:
-            rect = (block['start_x'], block['top_y'],
-                block['start_x'] + text_size[0] + 3, block['bottom_y'])
-        mask.rectangle(rect, "grey")
-        mask.text(corner, text, font=font, fill="white")
+            corner = (block['start_x'] + 1, block['top_y']+block['width']+6-7)
+        cr.move_to(*corner)
+        cr.show_text(text)
 
-    def render(self, input_midi_filename, frame_save_dir, tracks, speed_map,
-        dimensions, fps, min_pitch, max_pitch, first_frame=None,
-        last_frame=None, do_render=1):
+    def render(self, input_midi_filename, frame_save_dir, tracks, speed_map=[{'time':0.0,'speed':4}],
+        dimensions=(720,480), fps=29.97, min_pitch=34, max_pitch=86, first_frame=None,
+        last_frame=None, every_nth_frame=1, do_render=1):
+        """Render the animation!"""
 
         print "Beginning render..."
         speed = speed_map[0]['speed']
         if first_frame == None:
             first_frame = 0
         if last_frame == None:
-            last_frame = 1000000 # just a large number
+            last_frame = 10000000 # just a large number
 
         print "Lexing midi..."
         blocks = []
@@ -264,25 +264,22 @@ class MusAnimRenderer:
             return
 
         print "Rendering frames..."
-        font = ImageFont.truetype('IMFePIrm29P.ttf', 18)
         # generate frames while there are blocks on the screen:
         while last_block_end > (0 - speed):
-            if frame >= first_frame and frame <= last_frame:
-                im = Image.new("RGBA", dimensions, "black")
-                # overlay is for second drawing pass
-                im_overlay = Image.new("RGBA", dimensions, "black")
-                im_lyrics = Image.new("RGBA", dimensions, "black")
-
-                draw = ImageDraw.Draw(im)
-                draw_overlay = ImageDraw.Draw(im_overlay)
-                lyrics_draw = ImageDraw.Draw(im_lyrics)
-
-                # greyscale mask for compositing
-                mask = Image.new("L", dimensions, "black")
-                draw_mask = ImageDraw.Draw(mask)
-
-                lyrics_mask = Image.new("L", dimensions, "black")
-                lyrics_draw_mask = ImageDraw.Draw(lyrics_mask)
+            # code only for rendering blocks
+            if frame >= first_frame and frame <= last_frame and frame % every_nth_frame == 0:
+                # cairo setup stuff
+                filename = frame_save_dir + ("frame%05i.png" % frame)
+                surface = cairo.ImageSurface(cairo.FORMAT_RGB24, *dimensions)
+                #surface = cairo.SVGSurface(filename, *dimensions)
+                cr = cairo.Context(surface)
+                cr.set_antialias(cairo.ANTIALIAS_GRAY)
+                cr.select_font_face("Garamond", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+                cr.set_font_size(19)
+                # add black background
+                cr.set_source_rgb(0, 0, 0)
+                cr.rectangle(0, 0, *dimensions)
+                cr.fill()
 
                 # need to do two passes of drawing blocks, once in reverse order
                 # in full opacity, and a second time in ascending order in half-
@@ -295,24 +292,23 @@ class MusAnimRenderer:
 
                 # do first drawing pass
                 for block in on_screen_blocks:
-                    self.draw_block(block, tracks, dimensions, draw, draw_mask)
+                    self.draw_block_cairo(block, tracks, dimensions, cr)
 
                 # do second drawing pass
                 on_screen_blocks.reverse()
                 for block in on_screen_blocks:
-                    self.draw_block(block, tracks, dimensions, draw_overlay)
+                    self.draw_block_cairo(block, tracks, dimensions, cr, transparent=True)
 
-                # do lyrics pass
+                # do lyrics pass, sort by start x so starts of words are on top
+                on_screen_blocks.sort(lambda a, b: cmp(a['start_x'], b['start_x']))
                 for block in on_screen_blocks:
                     if ('lyrics' in block):
-                        self.draw_lyrics(block, tracks, dimensions, lyrics_draw,
-                            lyrics_draw_mask, font)
+                        self.draw_lyrics_cairo(block, tracks, dimensions, cr)
 
-                # stick two drawing passes on top of each other
-                im.paste(im_overlay, None, mask)
-                im.paste(im_lyrics, None, lyrics_mask)
+                #cr.save()
+                surface.write_to_png(filename)
 
-                im.save(frame_save_dir + ("frame%05i.png" % frame))
+            # other code needed to advance animation
             frame += 1
             # need to set speed
             speed = self.get_speed(speed_map, time)

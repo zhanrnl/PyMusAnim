@@ -3,9 +3,9 @@ import string
 
 def main():
     # the filename of the midi file to read music from
-    input_midi_filename = "gould/gouldsynccut05.MID"
-    # the directory to save the generated frames to
-    frame_save_dir = "gould/genimg/cut05/"
+    input_midi_filename = "gould/gouldsyncfull03.MID"
+    # the directory to save the generated frames to, relative to this file
+    frame_save_dir = "gould/genimg/full03/"
 
     soprano_lyrics = '''So you want to write a fugue? * * You've got the urge to
 write a fugue. * * You've ^got the nerve to write * a * fugue. So go * a- *
@@ -14,14 +14,23 @@ no mind to what we've told you. Give no heed to what we've told you. Pay no mind
 to what we've told you, what _we've told you. Just for- get all that we've told
 you and the theo- ry that you've read. Pay no mind, give no heed to * what we've
 * told you. Pay no mind to what we've told you, what we've said. Come and write
-one. ^Oh, do come and write on, oh, write us a fugue. Yes, write a fugue that we
+one. ^Oh, do come and write one, oh, write us a fugue. Yes, write a fugue that we
 can sing, that we can sing. ^For ^the on- ly way to ^write ^one is just to plunge
 right in and ^write * one. ^So just for get the rules * and * write one, have _a
 try. * For the on- ly way to write * one is just to plunge right in and ^write *
 ^one. So just ig- nore the rules * and * write one. It's * ^a * pleas- ure that is
 bound * to * sat- is- fy. And the fun of it ^will ^get you, And the _joy of ^it will
 _fetch you, it will fetch you. ^You'll _de- cide ^that John Se- bas- ^tian must have
-been a ver- y per- son- a- ble guy.
+been a ver- y per- son- a- ble guy. And * a * bit of aug- men- ta- tion is a se-
+ri- ous temp- ta- tion, While a stret- ti dim- in- u- * tion, is an ob- vi- ous
+so- lu- * tion, While a stret- ti, stret- ti stret- _ti dim- in- u- tion is a ver-
+y, ver- y ob- vi- ous sol- u- tion. Nev- er be clev- er for the sake of show-
+ing off. No, ^nev- er be clev- er for the sake of be- ing clev- ^er. But do try to
+write a fugue that we can sing, * * that we can sing. * * Just write a fugue
+that we * can sing. * Now, why don't you try to write one? Try to write a fugue
+for sing- ing. Write us a fugue _that we can sing. Come a- _long now. It's rath-
+er awe- some is- n't it? Well? Yes. Now _we're going to write a fugue. * _We're
+going to write a fugue right now.
 '''
     alto_lyrics = '''^So you want to write a _fugue? * * You've ^got the urge to
 ^write a fugue. * * You've ^got the nerve to write * a * fugue. * You've got the
@@ -40,9 +49,18 @@ _plunge right in and write * one. So just ig- nore the rules * and * write a
 fugue. It's a pleas- ure that is bound _to sat- is- fy. And the fun of it will
 get you, And _the _joy of it will _fetch you. _You'll de- cide that _John Se- bas-
 tian, _You'll de- cide that _John Se- bas- tian _was _a per- son- a- ble guy.
+But nev- er be clev- er for the sake of be- ing clev- er, For a can- on in in-
+ver- sion is a dan- ger- ous di- ver- sion. A bit of aug- men- ta- tion is a se-
+ri- ous temp- ta- * tion. Nev- er be clev- er for _the sake of show- * ing off.
+But nev- er be clev- er for the sake of be- ing clev-
+er, for the sake of * show- * * * * * * * * * * ing _off. Now, ^why don't you
+write a fugue, * * _why don't you try to ^write * one? * Write us a fugue * that
+we * can sing. * Now come a- long. And when you've fin- ished writ- ing it I
+think you'll ^find a great joy in it. Well? Why not? Now _we're going to write a
+fugue. * _We're going to write a fugue right now.
 '''
     tenor_lyrics = '''So you want to write a fugue? * * You've got the urge to
-write a fugue. * * You've ^got the nerve to write * a * fugue. So go * a- * head,
+write a fugue. * * You've ^got the nerve to write * a * fugue. So go * a- * ^head,
 * so go a- head, * and write a fugue. * * * * * So go a- head and write a fugue
 that we * can * _sing. Go a- head, write a fugue, and write ^a fugue that we can
 ^sing. Go a- head, _write _a fugue that _we can sing * * that we can sing * * and
@@ -61,7 +79,14 @@ ly way to write one is to plunge right _in and write one. Just ig- nore the rule
 It's a pleas- ure that ^is bound to sat- is- fy, to sat- is- fy. So why don't you
 try? For the on- ly way to write one is to ^plunge right in. * * * * * * * * *
 You'll de- cide that John Se- bas- _tian must have been a ver- y per- son- a-
-ble, been a ver- y per- son- a- ble guy.
+ble, been a ver- y per- son- a- ble guy. So nev- er be clev- er For the sake of
+be- ing clev- er, For the sake of show- ing off. Nev- er be clev- er for the
+sake of show- ing off. ^So you want _to write a fugue. * * You've got the urge to
+write a fugue. * * _You've got the nerve to write * a * fugue. * You've got the
+urge to write * a * fugue that we * can * sing. So write a fugue that we can
+sing. Why _don't you try to write one? Write a fugue that we can _sing. * Write
+a fugue that we can sing. * Oh, come a long. Well? Yes. Now _We're going to write
+a good one. _We're going to write a fugue right now.
 '''
     bass_lyrics = '''So you want to write a fugue? * * You've got the urge to
 write a fugue, * * You've ^got the nerve to write * a * fugue. So go * a- * head,
@@ -89,7 +114,16 @@ and write one. Yes, _plunge right in, have a try. Oh yes! Why don't you? Why
 don't you write a fugue * now? For the on- ly way to write one is to plunge
 right in. Just ig- ^nore _the rules and write one. _Have a try, * have ^a try. The
 fun of it will get ^you, Joy of it will fetch you. You'll de- cide that John Se-
-bas- tian was a per- son- a- ble guy.
+bas- tian was a per- son- a- ble guy. So nev- er be clev- er For the sake of
+be- ing clev- er, For the sake of show- ing off. Nev- er be clev- * er for the
+sake of show- ing off. So you want to write a fugue? * * _You've got the urge to
+write a fugue. * * _You've got the nerve to write * a * fugue. So go * a- * head
+and try to * write one, try to * write one. _Write us a good fugue, one that * we
+* can * sing. Oh, come * and try. Oh, why don't you try? Oh, _won't you try to
+write one * we can sing? Yes, come, let's try. Write us a fugue right now.
+(Hope so.) _Well, noth- ^ing ven- tured noth- ing gained, _they say. But still it
+is rath- er hard to start. Let us try. Right now? _We're going to write a good
+one. _We're going to write a fugue right now.
 '''
 
     # rendering parameters of all midi tracks in the midi file
@@ -119,6 +153,26 @@ bas- tian was a per- son- a- ble guy.
           'z-index': 1,
           'lyrics': bass_lyrics
         },
+        { 'name': "vln1",
+          'color': (0.917, 0.384, 0.149), # red
+          'width': 10,
+          'z-index': 0,
+        },
+        { 'name': "vln2",
+          'color': (0.776, 0.769, 0.098), # yellow
+          'width': 10,
+          'z-index': -1,
+        },
+        { 'name': "viola",
+          'color': (0.075, 0.568, 0.353), # green
+          'width': 10,
+          'z-index': -2,
+        },
+        { 'name': "cello",
+          'color': (0.188, 0.153, 0.945), # blue
+          'width': 10,
+          'z-index': -3,
+        },
     ]
 
     # for changing the block speed in the middle of an animation
@@ -132,17 +186,18 @@ bas- tian was a per- son- a- ble guy.
     # the intended fps of the animation
     fps = 29.97
     # pitches to be displayed at bottom and top of screen
-    min_pitch, max_pitch = 34, 90
+    min_pitch, max_pitch = 34, 86
 
-    # first and last frames to render (to save time, only render a subset
-    # of frames)
-    # if either are None, will default to first frame or last frame
+    # debugging options
     first_frame, last_frame = None, None
+    every_nth_frame = 1
+    do_render = True
 
     # enough config, let's render that shit
     renderer = MusAnimRenderer()
-    renderer.render(input_midi_filename, frame_save_dir, tracks, speed_map,
-        dimensions, fps, min_pitch, max_pitch, first_frame, last_frame, 1)
+    renderer.render(input_midi_filename, frame_save_dir, tracks,
+        first_frame=first_frame, last_frame=last_frame,
+        every_nth_frame=every_nth_frame, do_render=do_render)
 
 
 if __name__ == '__main__':
