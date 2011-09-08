@@ -69,9 +69,12 @@ class MidiLexer:
                 self.midi_events.append({'type': 'note_on', 'time': time,
                     'pitch': ord(track_data[1]), 'track_num': track_num})
             return track_data[3:], time
-
+        elif ((ord(track_data[0]) & 0xF0) >> 4) == 0xC:
+            return track_data[2:], time # ignore some other events
+        elif ((ord(track_data[0]) & 0xF0) >> 4) == 0xB:
+            return track_data[3:], time
         else:
-            raise Exception("Unknown midi file data event")
+            raise Exception("Unknown midi file data event: " + str(ord(track_data[0])))
 
     def lex(self, filename):
         """Returns block list for musanim from a midi file given in filename"""

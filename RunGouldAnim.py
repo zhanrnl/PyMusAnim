@@ -3,9 +3,9 @@ import string
 
 def main():
     # the filename of the midi file to read music from
-    input_midi_filename = "gould/gouldsyncfull03.MID"
+    input_midi_filename = "gould/gouldsyncfull04.MID"
     # the directory to save the generated frames to, relative to this file
-    frame_save_dir = "gould/genimg/full03/"
+    frame_save_dir = "gould/full03/"
 
     soprano_lyrics = '''So you want to write a fugue? * * You've got the urge to
 write a fugue. * * You've ^got the nerve to write * a * fugue. So go * a- *
@@ -27,7 +27,7 @@ so- lu- * tion, While a stret- ti, stret- ti stret- _ti dim- in- u- tion is a ve
 y, ver- y ob- vi- ous sol- u- tion. Nev- er be clev- er for the sake of show-
 ing off. No, ^nev- er be clev- er for the sake of be- ing clev- ^er. But do try to
 write a fugue that we can sing, * * that we can sing. * * Just write a fugue
-that we * can sing. * Now, why don't you try to write one? Try to write a fugue
+that we * can sing. * Now, why don't you try to write ^one? Try to write a fugue
 for sing- ing. Write us a fugue _that we can sing. Come a- _long now. It's rath-
 er awe- some is- n't it? Well? Yes. Now _we're going to write a fugue. * _We're
 going to write a fugue right now.
@@ -54,7 +54,7 @@ ver- sion is a dan- ger- ous di- ver- sion. A bit of aug- men- ta- tion is a se-
 ri- ous temp- ta- * tion. Nev- er be clev- er for _the sake of show- * ing off.
 But nev- er be clev- er for the sake of be- ing clev-
 er, for the sake of * show- * * * * * * * * * * ing _off. Now, ^why don't you
-write a fugue, * * _why don't you try to ^write * one? * Write us a fugue * that
+write _a ^fugue, * * _why don't _you try to ^write * one? * Write us a fugue * that
 we * can sing. * Now come a- long. And when you've fin- ished writ- ing it I
 think you'll ^find a great joy in it. Well? Why not? Now _we're going to write a
 fugue. * _We're going to write a fugue right now.
@@ -83,8 +83,8 @@ ble, been a ver- y per- son- a- ble guy. So nev- er be clev- er For the sake of
 be- ing clev- er, For the sake of show- ing off. Nev- er be clev- er for the
 sake of show- ing off. ^So you want _to write a fugue. * * You've got the urge to
 write a fugue. * * _You've got the nerve to write * a * fugue. * You've got the
-urge to write * a * fugue that we * can * sing. So write a fugue that we can
-sing. Why _don't you try to write one? Write a fugue that we can _sing. * Write
+urge to write * a * fugue that we * can * sing. _So write a fugue _that ^we can
+sing. Why _don't you _try to write _one? _Write a fugue _that we can _sing. * Write
 a fugue that we can sing. * Oh, come a long. Well? Yes. Now _We're going to write
 a good one. _We're going to write a fugue right now.
 '''

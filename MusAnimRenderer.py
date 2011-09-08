@@ -27,7 +27,7 @@ class MusAnimRenderer:
         bpm = 120.0
         time_seconds = 0
         time_beats = 0
-        tracks_mode = ['normal'] * 9
+        tracks_mode = ['normal'] * 100
         for event in midi_events:
             # increment times based on elapsed time in beats
             d_time_beats = event['time'] - time_beats
@@ -94,7 +94,12 @@ class MusAnimRenderer:
                 min_pitch)) * dimensions[1]
             block['top_y'] = y_middle - (block['width'] / 2)
             block['bottom_y'] = y_middle + (block['width'] / 2)
+            if 'z-index' not in track:
+                track['z-index'] = 0
             block['z-index'] = track['z-index']
+            if 'layer' not in track:
+                track['layer'] = 0
+            block['layer'] = track['layer']
             # round stuff for crisp rendering
             #block['x_length'] = round(block['x_length'])
             block['top_y'] = round(block['top_y'])
@@ -185,13 +190,14 @@ class MusAnimRenderer:
         cr.fill()
 
     def draw_lyrics_cairo(self, block, tracks, dimensions, cr):
+        cr.set_font_size(1.9*block['width'])
         text = block['lyrics']
         x_bearing, y_bearing, width, height = cr.text_extents(text)[:4]
         cr.set_source_rgba(0, 0, 0, 0.5)
         if block['lyrics_position'] == 'above':
-            rect = (block['start_x'], int(block['top_y'])-7, width + 2, block['width']+1)
+            rect = (block['start_x'], int(block['top_y'])-0.7*block['width'], width + 2, block['width']+1)
         elif block['lyrics_position'] == 'below':
-            rect = (block['start_x'], int(block['top_y'])+7, width + 2, block['width']+1)
+            rect = (block['start_x'], int(block['top_y'])+0.7*block['width'], width + 2, block['width']+1)
         else:
             rect = (block['start_x'], int(block['top_y']), width + 2, block['width']+1)
         cr.rectangle(*rect)
@@ -203,11 +209,11 @@ class MusAnimRenderer:
             color = tracks[block['track_num']]['lyrics_color']
         cr.set_source_rgb(*color)
         if block['lyrics_position'] == 'above':
-            corner = (block['start_x'] + 1, block['top_y']+block['width']+6-14)
+            corner = (block['start_x'] + 1, block['top_y']+0.18*block['width'])
         elif block['lyrics_position'] == 'below':
-            corner = (block['start_x'] + 1, block['top_y']+block['width']+6)
+            corner = (block['start_x'] + 1, block['top_y']+1.58*block['width'])
         else:
-            corner = (block['start_x'] + 1, block['top_y']+block['width']+6-7)
+            corner = (block['start_x'] + 1, block['top_y']+0.88*block['width'])
         cr.move_to(*corner)
         cr.show_text(text)
 
@@ -289,15 +295,25 @@ class MusAnimRenderer:
                 # get list of blocks that are on screen
                 on_screen_blocks = [block for block in blocks
                     if block['start_x'] < dimensions[0] and block['end_x'] > 0]
+                on_screen_layers = list(set([block['layer'] for block in on_screen_blocks]))
+                
+                for layer in on_screen_layers:
+                    layer_surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, *dimensions)
+                    layer_context = cairo.Context(layer_surface)
+                    
+                    in_layer_blocks = [block for block in on_screen_blocks if block['layer'] == layer]
 
-                # do first drawing pass
-                for block in on_screen_blocks:
-                    self.draw_block_cairo(block, tracks, dimensions, cr)
+                    # do first drawing pass
+                    for block in in_layer_blocks:
+                        self.draw_block_cairo(block, tracks, dimensions, layer_context)
 
-                # do second drawing pass
-                on_screen_blocks.reverse()
-                for block in on_screen_blocks:
-                    self.draw_block_cairo(block, tracks, dimensions, cr, transparent=True)
+                    # do second drawing pass
+                    on_screen_blocks.reverse()
+                    for block in in_layer_blocks:
+                        self.draw_block_cairo(block, tracks, dimensions, layer_context, transparent=True)
+                        
+                    cr.set_source_surface(layer_surface)
+                    cr.paint()
 
                 # do lyrics pass, sort by start x so starts of words are on top
                 on_screen_blocks.sort(lambda a, b: cmp(a['start_x'], b['start_x']))
