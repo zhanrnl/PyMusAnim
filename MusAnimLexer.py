@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import sys
 
 class MidiLexer:
@@ -7,6 +8,11 @@ class MidiLexer:
     # beats, without making any pretenses about figuring out timing in seconds.
     # That has to be done later, once we have all the timing events sorted
     midi_events = []
+    minPitch = sys.maxsize
+    maxPitch = -sys.maxsize-1
+
+    def debug(self, event):
+        print('Unknown event: ' + bin(event) + " (" + hex(event) + ")")
 
     def get_v_time(self, data):
         """Picks off the variable-length time from a block of data and returns
@@ -27,11 +33,12 @@ class MidiLexer:
         # have to read off vtime first!
         d_time, track_data = self.get_v_time(track_data)
         time += d_time
+        #print time
+        event=((ord(track_data[0]) & 0xF0) >> 4)
 
         if track_data[0] == '\xff':
             # event is meta event, we do nothing unless it's a tempo event
             if ord(track_data[1]) == 0x51:
-                #print track_num, list(track_data)
                 # tempo event
                 mpqn = ((ord(track_data[3]) << 16) + (ord(track_data[4]) << 8)
                     + ord(track_data[5])) # microseconds per quarter note
@@ -44,7 +51,7 @@ class MidiLexer:
                 return track_data[length+3:], time
 
         # otherwise we we assume it's a midi event
-        elif ((ord(track_data[0]) & 0xF0) >> 4) == 0x8:
+        elif event == 0x8:
             # note off event
             # don't add a note off event if keyswitch (pitch below 12)
             pitch = ord(track_data[1])
@@ -53,7 +60,7 @@ class MidiLexer:
                     'pitch': pitch, 'track_num': track_num})
             return track_data[3:], time
 
-        elif ((ord(track_data[0]) & 0xF0) >> 4) == 0x9:
+        elif event == 0x9:
             # note on event
             pitch = ord(track_data[1])
             if pitch < 12: # it's a keyswitch!
@@ -62,19 +69,30 @@ class MidiLexer:
                 elif pitch == 1:
                     mode = "pizz"
                 else:
-                    raise Exception("Unknown keyswitch")
-                self.midi_events.append({'type': 'keyswitch', 'time': time,
-                    'track_num': track_num, 'mode': mode})
+                    print(("Unknown keyswitch: "+str(pitch)))
+                    pitch=False
+                if pitch != False:
+                  self.midi_events.append({'type': 'keyswitch', 'time': time,
+                      'track_num': track_num, 'mode': mode})
             else:
+                if pitch > self.maxPitch:
+                    self.maxPitch = pitch
+                if pitch < self.minPitch:
+                    self.minPitch = pitch
                 self.midi_events.append({'type': 'note_on', 'time': time,
                     'pitch': ord(track_data[1]), 'track_num': track_num})
             return track_data[3:], time
-        elif ((ord(track_data[0]) & 0xF0) >> 4) == 0xC:
+        elif event == 0xC:
             return track_data[2:], time # ignore some other events
-        elif ((ord(track_data[0]) & 0xF0) >> 4) == 0xB:
+        elif event == 0xB:
             return track_data[3:], time
+        #kek
+        elif event == 0xF or event == 0xD:
+            self.debug(event)
+            return track_data[2:], time
         else:
-            raise Exception("Unknown midi file data event: " + str(ord(track_data[0])))
+            self.debug(event)
+            return track_data[3:], time
 
     def lex(self, filename):
         """Returns block list for musanim from a midi file given in filename"""
@@ -88,12 +106,12 @@ class MidiLexer:
 
         # open and read file
         f = open(filename, 'rb')
-        s = f.read()
+        s = f.read().decode('latin-1')
 
         # grab header
         header = s[0:14]
         f_format = ord(s[8]) << 8 | ord(s[9])
-        num_tracks = ord(s[10]) << 8 | ord(s[11])
+        self.num_tracks = ord(s[10]) << 8 | ord(s[11])
         self.ticks_per_quarter = ord(s[12]) << 8 | ord(s[13])
 
         tracks_chunk = s[14:]
@@ -110,13 +128,13 @@ class MidiLexer:
 
         # convert all times from ticks to beats, for convenience
         for event in self.midi_events:
-            event['time'] = (event['time'] + 0.0) / 960
+            event['time'] = (event['time'] + 0.0) / self.ticks_per_quarter #960
 
-        self.midi_events.sort(lambda a, b: cmp(a['time'], b['time']))
+        self.midi_events.sort(key=lambda a: a['time'])
         return self.midi_events
 
 
 if __name__ == '__main__':
     lexer = MidiLexer()
     blocks = lexer.lex('multitrackmidi01.MID')
-    print blocks
+    print(blocks)

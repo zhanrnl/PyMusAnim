@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 import sys
 import colorsys
@@ -7,6 +8,8 @@ from collections import deque
 from MusAnimLexer import MidiLexer
 
 class MusAnimRenderer:
+    first_highlight = False
+  
     def lyrics_deque(self, lyrics):
         """Turns lyrics as a string into a lyrics deque, splitting by spaces and
         removing newlines."""
@@ -62,8 +65,7 @@ class MusAnimRenderer:
 
     def add_block_info(self, blocks, tracks, fps, speed_map, dimensions,
         min_pitch, max_pitch):
-        """Adds essential information to each block dict in blocks, also returns
-        last_block_end to tell when animation is over"""
+        """Adds essential information to each block dict in blocks, also returns last_block_end to tell when animation is over"""
         # need: start_time (seconds), end_time (seconds), pitch, track_num for
         # each block
         last_block_end = 0
@@ -106,7 +108,7 @@ class MusAnimRenderer:
             #block['start_x'] = round(block['start_x'])
 
         # sort by track_num so we get proper melisma length counting
-        blocks.sort(lambda a, b: cmp(a['track_num'], b['track_num']))
+        blocks.sort(key=lambda a: a['track_num'])
 
         # can't add lyrics until we add in end_x for all blocks
         block_num = 0
@@ -138,14 +140,12 @@ class MusAnimRenderer:
             block_num += 1
 
         # go back to sorting by start time
-        blocks.sort(lambda a, b: cmp(a['start_time'], b['start_time']))
+        blocks.sort(key=lambda a: a['start_time'])
 
         return blocks, last_block_end
 
     def calc_offset(self, speed_map, time_offset, fps):
-        """Calculates the x-offset of a block given its time offset and a speed
-        map. Needed for laying out blocks because of variable block speed in the
-        animation."""
+        """Calculates the x-offset of a block given its time offset and a speed map. Needed for laying out blocks because of variable block speed in the animation."""
         x_offset = 0
         i = 0
         # speed is a dict with a speed and a time when we switch to speed
@@ -172,20 +172,29 @@ class MusAnimRenderer:
         return speed_map[i]['speed']
 
     def draw_block_cairo(self, block, tracks, dimensions, cr, transparent=False):
-        if block['start_x'] < (dimensions[0] / 2) and (block['end_x'] >
-            (dimensions[0] / 2)):
-            color = tracks[block['track_num']]['high_color']
+        middle=dimensions[0] / 2
+        start=block['start_x']
+        if start< middle and block['end_x'] > middle:
+            color = tracks[block['track_num']]['color' if self.dynamicmode else 'high_color']
+            self.first_highlight = True
         else:
             color = tracks[block['track_num']]['color']
+            transparent=transparent or self.dynamicmode
         if transparent:
-            r, g, b = color
-            cr.set_source_rgba(r, g, b, 0.5)
+            alpha=0.5
+            if self.dynamicmode:
+              alpha=block['end_x']#block position
+              alpha=2*(middle-alpha)#distance from middle
+              alpha=1-(alpha/middle)#percentage
+              alpha=alpha/3.0#force past blocks to be at most 33% opaque
+            cr.set_source_rgba(color[0], color[1], color[2], alpha)
         else:
             cr.set_source_rgb(*color)
         if block['shape'] == 'circle':
-            cr.arc(block['start_x'] + block['width']/2, block['top_y'] + block['width']/2, block['width']/2, 0, 2 * math.pi)
+            halfwidth=block['width']/2
+            cr.arc(start + halfwidth, block['top_y'] + halfwidth, halfwidth, 0, 2 * math.pi)
         else:
-            cr.rectangle(block['start_x'], block['top_y'], block['x_length'],
+            cr.rectangle(start, block['top_y'], block['x_length'],
                 block['width'])
         cr.fill()
 
@@ -217,25 +226,36 @@ class MusAnimRenderer:
         cr.move_to(*corner)
         cr.show_text(text)
 
-    def render(self, input_midi_filename, frame_save_dir, tracks, speed_map=[{'time':0.0,'speed':4}],
-        dimensions=(720,480), fps=29.97, min_pitch=34, max_pitch=86, first_frame=None,
-        last_frame=None, every_nth_frame=1, do_render=1):
+    speed_map=[{'time':0.0,'speed':4}]
+    width=720
+    height=480
+    fps=29.97
+    min_pitch=34
+    max_pitch=86
+    first_frame=None
+    last_frame=None
+    every_nth_frame=1
+    do_render=1
+    introduction=True
+  
+    def render(self, input_midi_filename, frame_save_dir, tracks, speed_map=speed_map,dimensions=(width, height), fps=fps, min_pitch=min_pitch, max_pitch=max_pitch, first_frame=first_frame,last_frame=last_frame, every_nth_frame=every_nth_frame, do_render=do_render,dynamicmode=False):
+        self.dynamicmode=dynamicmode
         """Render the animation!"""
-
-        print "Beginning render..."
+        print("Beginning render...")
         speed = speed_map[0]['speed']
         if first_frame == None:
             first_frame = 0
         if last_frame == None:
             last_frame = 10000000 # just a large number
 
-        print "Lexing midi..."
+        print("Lexing midi...")
         blocks = []
         lexer = MidiLexer()
         midi_events = lexer.lex(input_midi_filename)
 
-        print "Blockifying midi..."
+        print("Blockifying midi...")
         blocks = self.blockify(midi_events) # convert into list of blocks
+        print(str(len(blocks))+" blocks")
 
         for track in tracks:
             if 'color' in track:
@@ -257,27 +277,27 @@ class MusAnimRenderer:
         last_percent = -1
 
         # sort by z-index descending
-        blocks.sort(lambda a, b: cmp(b['z-index'], a['z-index']))
+        blocks.sort(key=lambda a: a['z-index'],reverse=True)
 
         # for naming image files:
         frame = 0
+        framefile = 0
         # for keeping track of speed changes:
         # need to initialize time
         time = -dimensions[0]/(2.0*fps*speed_map[0]['speed'])
 
         if not do_render:
-            print "Skipping render pass, Done!"
+            print("Skipping render pass, Done!")
             return
 
-        print "Rendering frames..."
+        print("Rendering frames...")
         # generate frames while there are blocks on the screen:
-        while last_block_end > (0 - speed):
+        while last_block_end > -speed:
             # code only for rendering blocks
-            if frame >= first_frame and frame <= last_frame and frame % every_nth_frame == 0:
+            if first_frame < frame and frame <= last_frame and frame % every_nth_frame == 0:
                 # cairo setup stuff
-                filename = frame_save_dir + ("frame%05i.png" % frame)
+                filename = frame_save_dir + ("frame%05i.png" % framefile)
                 surface = cairo.ImageSurface(cairo.FORMAT_RGB24, *dimensions)
-                #surface = cairo.SVGSurface(filename, *dimensions)
                 cr = cairo.Context(surface)
                 cr.set_antialias(cairo.ANTIALIAS_GRAY)
                 cr.select_font_face("Garamond", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
@@ -287,63 +307,84 @@ class MusAnimRenderer:
                 cr.rectangle(0, 0, *dimensions)
                 cr.fill()
 
-                # need to do two passes of drawing blocks, once in reverse order
-                # in full opacity, and a second time in ascending order in half-
-                # opacityto get fully-colored bars that blend together when
-                # overlapping
+                '''need to do two passes of drawing blocks, once in reverse order in full opacity, and a second time in ascending order in half-opacity to get fully-colored bars that blend together when overlapping'''
 
                 # get list of blocks that are on screen
                 on_screen_blocks = [block for block in blocks
-                    if block['start_x'] < dimensions[0] and block['end_x'] > 0]
-                on_screen_layers = list(set([block['layer'] for block in on_screen_blocks]))
+                    if block['start_x'] < dimensions[0]]
                 
-                for layer in on_screen_layers:
+                for layer in {block['layer'] for block in on_screen_blocks}:
                     layer_surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, *dimensions)
                     layer_context = cairo.Context(layer_surface)
                     
                     in_layer_blocks = [block for block in on_screen_blocks if block['layer'] == layer]
-
+                        
                     # do first drawing pass
                     for block in in_layer_blocks:
+                        block=self.makedynamic(block, dimensions)
+                        if block==None:
+                          continue
                         self.draw_block_cairo(block, tracks, dimensions, layer_context)
 
                     # do second drawing pass
                     on_screen_blocks.reverse()
                     for block in in_layer_blocks:
+                        block=self.makedynamic(block, dimensions)
+                        if block==None:
+                          continue
                         self.draw_block_cairo(block, tracks, dimensions, layer_context, transparent=True)
                         
                     cr.set_source_surface(layer_surface)
                     cr.paint()
 
                 # do lyrics pass, sort by start x so starts of words are on top
-                on_screen_blocks.sort(lambda a, b: cmp(a['start_x'], b['start_x']))
+                on_screen_blocks.sort(key=lambda a: a['start_x'])
                 for block in on_screen_blocks:
                     if ('lyrics' in block):
                         self.draw_lyrics_cairo(block, tracks, dimensions, cr)
 
-                #cr.save()
-                surface.write_to_png(filename)
+                if self.introduction or self.first_highlight:
+                    framefile += 1
+                    surface.write_to_png(filename)
 
             # other code needed to advance animation
             frame += 1
             # need to set speed
             speed = self.get_speed(speed_map, time)
-            for block in blocks: # move blocks to left
+            for block in list(blocks): # move blocks to left
+                end=block['end_x']-speed
+                if end<0: 
+                  '''trash blocks no longer needed. benchmark shows this causes a 2% increase in processing time in medium-sized files (~1000 blocks) but up to 15% redution in big files (~10000 blocks)'''
+                  blocks.remove(block)
+                  continue
+                block['end_x'] = end
                 block['start_x'] -= speed
-                block['end_x'] -= speed
                 if 'lyrics_end_x' in block:
                     block['lyrics_end_x'] -= speed
             last_block_end -= speed # move video endpoint left as well
-            percent = int(min((original_end - last_block_end) * 100.0
-                / original_end, 100))
+            percent = min(int((original_end - last_block_end) * 100.0
+                / original_end), 100)
             if percent != last_percent:
-                print percent, "% done"
+                print(percent, "% done")
             last_percent = percent
 
             time += (1/fps)
 
-        print "Done!"
+        print("Done!")
 
+
+    def makedynamic(self, block, dimensions):
+        if self.dynamicmode:
+          middle=dimensions[0] / 2
+          if block['start_x'] > middle:
+            return None
+          if block['end_x'] > middle:
+            block=block.copy()
+            shorten=block['end_x']-(middle+1)
+            block['end_x']-=shorten
+            block['x_length']-=shorten
+            return block
+        return block
 
 if __name__ == '__main__':
     print ("Sorry, I don't really do anything useful as an executable, see "
